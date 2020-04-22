@@ -1,3 +1,5 @@
 .vscode/*
 env/*
 archived_activities/*
+input/*
+output/*
