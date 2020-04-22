@@ -16,8 +16,6 @@ ROLLING_WINDOW_WIDTH = 20
 
 # Units in ft, miles
 
-ns = {'tg': 'http://www.topografix.com/GPX/1/1'}
-
 def calcMiles(point_1, point_2, dimensions=['lat','lon','ele']):
     quotient = 0.0
 
@@ -41,6 +39,8 @@ def calcGrade(point_1, point_2):
     return rise_miles / dist_miles * 100 if dist_miles else 0.0
 
 def parseGPX(f):
+    ns = {'tg': 'http://www.topografix.com/GPX/1/1'}
+
     points = []
     speed_rolling_window_sum = 0
     grade_rolling_window_sum = 0
@@ -93,6 +93,7 @@ def parseGPX(f):
     return points
 
 def main(args):
+    # Change directory to current scripts directory
     abspath = os.path.abspath(__file__)
     dname = os.path.dirname(abspath)
     os.chdir(dname)
@@ -100,11 +101,13 @@ def main(args):
     input_dir = args.input_dir    
     output_dir = args.output_dir
 
+    # Scan for files in input directory with extension .gpx
     files = []
     for f in os.listdir(input_dir):
         if f.endswith('.gpx'):
             files.append(f)
 
+    # Summarize inputs
     print('----------')
     print('gpx-to-csv')
     print('----------')
@@ -113,7 +116,7 @@ def main(args):
     print(' -> files found: {}'.format(files))
     print('----------')
 
-    
+    # Convert .gpx files
     print('------------------------')
     print('Starting Convertions ...')
     print('------------------------')
@@ -127,7 +130,6 @@ def main(args):
     print('------------------------')
     print('Done converting!')
     print('View converted files in output_dir: {}'.format(output_dir))
-    
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
