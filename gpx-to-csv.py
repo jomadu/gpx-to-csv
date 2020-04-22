@@ -5,8 +5,9 @@ import os
 import numpy as np
 import math
 import xml.etree.ElementTree as et
-from dateutil import parser
+from dateutil import parser as dtparser
 from datetime import datetime
+import argparse
 
 FT_PER_DEG_LAT = 362776.87
 FT_PER_DEG_LONG = 365165.34
@@ -30,12 +31,12 @@ def calcMiles(point_1, point_2, dimensions=['lat','lon','ele']):
     
     return math.sqrt(quotient) / FT_PER_MILE
 
-def calcSpeed(point_1, point_2) -> float:
+def calcSpeed(point_1, point_2):
     miles = calcMiles(point_1, point_2)
     hours = (point_2["Timestamp"] - point_1["Timestamp"]).seconds / 3600
     return miles / hours
 
-def calcGrade(point_1, point_2) -> float:
+def calcGrade(point_1, point_2):
     rise_miles = (point_2["Elevation"] - point_1["Elevation"]) / FT_PER_MILE
     dist_miles = calcMiles(point_1, point_2, dimensions=['lat', 'lon'])
     return rise_miles / dist_miles * 100 if dist_miles else 0.0
@@ -54,7 +55,7 @@ def parseGPX(f):
                     lat = float(trkpt_elem.attrib.get("lat"))
                     lon = float(trkpt_elem.attrib.get("lon"))
                     ele = float(trkpt_elem.find("tg:ele", ns).text)
-                    t = parser.isoparse(trkpt_elem.find("tg:time", ns).text)
+                    t = dtparser.isoparse(trkpt_elem.find("tg:time", ns).text)
                     curr_point = {
                         "Timestamp": t,
                         "Latitude": lat,
@@ -92,14 +93,48 @@ def parseGPX(f):
                     points.append(curr_point)
     return points
 
+def main(args):
+    abspath = os.path.abspath(__file__)
+    dname = os.path.dirname(abspath)
+    os.chdir(dname)
 
-files = os.listdir('input/')
-df = pd.DataFrame()
-for f in files:
-    if f.endswith('.gpx'):
-        input_filename = 'input/' + f
-        output_filename = 'output/' + os.path.splitext(os.path.basename(f))[0] + '.csv'
-        print('converting: input/{} -> output/{}'.format(input_filename, output_filename))
-        df = pd.DataFrame(parseGPX(input_filename))
-        df.to_csv(output_filename, index=False)
-        print(df.tail(6))
+    input_dir = args.input_dir    
+    output_dir = args.output_dir
+
+    files = []
+    for f in os.listdir(input_dir):
+        if f.endswith('.gpx'):
+            files.append(f)
+
+    print('----------')
+    print('gpx-to-csv')
+    print('----------')
+    print(' -> input_dir: {}'.format(input_dir))
+    print(' -> output_dir: {}'.format(output_dir))
+    print(' -> files found: {}'.format(files))
+    print('----------')
+
+    
+    print('------------------------')
+    print('Starting Convertions ...')
+    print('------------------------')
+    for f in files:
+        if f.endswith('.gpx'):
+            input_filename = input_dir + '/' + f
+            output_filename = output_dir + '/' + os.path.splitext(os.path.basename(f))[0] + '.csv'
+            print('converting: {} -> {}'.format(input_filename, output_filename))
+            df = pd.DataFrame(parseGPX(input_filename))
+            df.to_csv(output_filename, index=False)
+    print('------------------------')
+    print('Done converting!')
+    print('View converted files in output_dir: {}'.format(output_dir))
+    
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument("-i", "--input-dir", action="store", dest="input_dir", default="input", help="directory from which .gpx files are parsed")
+    parser.add_argument("-o", "--output-dir", action="store", dest="output_dir", default="output", help="directory to which .csv file are written")
+
+    args = parser.parse_args()
+    main(args)
