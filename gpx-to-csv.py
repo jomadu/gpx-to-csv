@@ -12,7 +12,11 @@ import argparse
 FT_PER_DEG_LAT = 362776.87
 FT_PER_DEG_LONG = 365165.34
 FT_PER_MILE = 5280
-ROLLING_WINDOW_WIDTH = 20
+SMOOTHING_WINDOW_WIDTH = 5
+
+MAX_DISTANCE_STEP_SIZE = 0.1 * FT_PER_MILE
+MAX_SPEED_STEP_SIZE = 10
+MAX_GRADE_STEP_SIZE = 40
 
 # Units in ft, miles
 
@@ -30,7 +34,8 @@ def calcMiles(point_1, point_2, dimensions=['lat','lon','ele']):
 
 def calcSpeed(point_1, point_2):
     miles = calcMiles(point_1, point_2)
-    hours = (point_2["Timestamp"] - point_1["Timestamp"]).seconds / 3600
+    t_delta = point_2["Timestamp"] - point_1["Timestamp"]
+    hours = t_delta.seconds / 3600 + t_delta.microseconds / (100000 * 3600)
     return miles / hours
 
 def calcGrade(point_1, point_2):
@@ -42,6 +47,11 @@ def parseGPX(f):
     ns = {'tg': 'http://www.topografix.com/GPX/1/1'}
 
     points = []
+    smoothing_sums = {
+        "Speed": 0,
+        "Grade": 0,
+        "Elevation": 0
+    }
     speed_rolling_window_sum = 0
     grade_rolling_window_sum = 0
 
@@ -62,32 +72,27 @@ def parseGPX(f):
                         "Elevation": ele
                     }
                     if len(points) > 0:
-                        curr_point["Distance"] = points[-1]["Distance"] + calcMiles(points[-1], curr_point)
-                        curr_point["Speed"] = calcSpeed(points[-1], curr_point)
-                        curr_point["Grade"] = calcGrade(points[-1], curr_point)
-                        start_time = points[0]["Timestamp"]
-                        curr_point["Duration"] = curr_point["Timestamp"] - start_time
+                        distance_since_last = calcMiles(points[-1], curr_point)
+                        speed = calcSpeed(points[-1], curr_point)
+                        grade = calcGrade(points[-1], curr_point)
+                        duration_since_last = curr_point["Timestamp"] - points[-1]["Timestamp"]
+                        curr_point["Speed"] = speed if abs(speed - points[-1]["Speed"])  < MAX_SPEED_STEP_SIZE else points[-1]["Speed"]
+                        curr_point["Grade"] = grade if abs(grade - points[-1]["Grade"]) < MAX_GRADE_STEP_SIZE else points[-1]["Grade"]
+                        curr_point["Distance"] = points[-1]["Distance"] + (distance_since_last if distance_since_last < MAX_DISTANCE_STEP_SIZE else points[-1]["Speed"] * duration_since_last)
+
                     else:
                         curr_point["Distance"] = 0
                         curr_point["Speed"] = 0
                         curr_point["Grade"] = 0
-                        start_time = curr_point["Timestamp"]
-                        curr_point["Duration"] = curr_point["Timestamp"] - start_time
-
-                    if len(points) >= ROLLING_WINDOW_WIDTH:
-                        speed_rolling_window_sum -= points[-ROLLING_WINDOW_WIDTH]["Speed"]
-                        speed_rolling_window_sum += curr_point["Speed"]
-                        curr_point["Speed (Window Avg)"] = speed_rolling_window_sum / ROLLING_WINDOW_WIDTH
-
-                        grade_rolling_window_sum -= points[-ROLLING_WINDOW_WIDTH]["Grade"]
-                        grade_rolling_window_sum += curr_point["Grade"]
-                        curr_point["Grade (Window Avg)"] = grade_rolling_window_sum / ROLLING_WINDOW_WIDTH
+                    if len(points) >= SMOOTHING_WINDOW_WIDTH:
+                        for key in smoothing_sums:
+                            smoothing_sums[key] -= points[-SMOOTHING_WINDOW_WIDTH][key]
+                            smoothing_sums[key] += curr_point[key]
+                            curr_point[key + " (Smoothed)"] = smoothing_sums[key] / SMOOTHING_WINDOW_WIDTH
                     else:
-                        speed_rolling_window_sum += curr_point["Speed"]
-                        curr_point["Speed (Window Avg)"] = speed_rolling_window_sum / (len(points) + 1)
-
-                        grade_rolling_window_sum += curr_point["Grade"]
-                        curr_point["Grade (Window Avg)"] = grade_rolling_window_sum / (len(points) + 1)
+                        for key in smoothing_sums:
+                            smoothing_sums[key] += curr_point[key]
+                            curr_point[key + " (Smoothed)"] = smoothing_sums[key] / (len(points) + 1)
 
                     points.append(curr_point)
     return points
