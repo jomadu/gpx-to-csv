@@ -13,7 +13,6 @@ FT_PER_DEG_LAT = 362776.87
 FT_PER_DEG_LONG = 365165.34
 FT_PER_MILE = 5280
 ROLLING_WINDOW_WIDTH = 20
-input = []
 
 # Units in ft, miles
 
